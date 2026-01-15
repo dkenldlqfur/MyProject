@@ -69,6 +69,9 @@ namespace Game.Battle
                     return;
                 }
 
+                // 턴 시작 시 상태 초기화
+                currentTurnCharacter.IsInterruptRequested = false;
+
                 ExecuteAutoTurn(currentTurnCharacter);
             }
             else
@@ -114,11 +117,11 @@ namespace Game.Battle
             // 2. 자원 고갈 체크 (모든 생존 캐릭터가 스킬 사용 불가 상태인지)
             // (주의: 일반 공격도 스킬로 취급한다면, 일반 공격조차 못하는 상황을 의미)
             var allSurvival = new List<Character>();
-            allSurvival.AddRange(allies.Where(c => c.CurrentStats.hp > 0));
-            allSurvival.AddRange(enemies.Where(c => c.CurrentStats.hp > 0));
+            allSurvival.AddRange(allies.Where(c => 0 < c.CurrentStats.hp));
+            allSurvival.AddRange(enemies.Where(c => 0 < c.CurrentStats.hp));
 
             // 생존자가 하나라도 있는데, 행동 가능한 캐릭터가 단 하나도 없다면 전투 종료
-            if (allSurvival.Count > 0 && allSurvival.All(c => !c.HasEnoughResourceForAnyActiveSkill()))
+            if (0 < allSurvival.Count && allSurvival.All(c => !c.HasEnoughResourceForAnyActiveSkill()))
                 return true;
 
             return false;

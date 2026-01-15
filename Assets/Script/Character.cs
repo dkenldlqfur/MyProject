@@ -1,11 +1,11 @@
+using System.Collections.Generic;
+using UnityEngine;
+using Game.Data;
+using Game.Battle;
+using System;
+
 namespace Game.Core
 {
-    using System.Collections.Generic;
-    using UnityEngine;
-    using Game.Data;
-    using Game.Battle;
-    using System;
-
     [System.Flags]
     public enum CrowdControlType
     {
@@ -155,12 +155,11 @@ namespace Game.Core
 
         public float GetAnimationClipLength(string clipName)
         {
-            if (animator == null || animator.runtimeAnimatorController == null)
+            if (null == animator || null == animator.runtimeAnimatorController)
                 return 0f;
 
             foreach (var clip in animator.runtimeAnimatorController.animationClips)
-            {
-                if (clip.name == clipName)
+                if (clipName == clip.name)
                     return clip.length;
             }
             return 0f; // 찾지 못함
@@ -178,17 +177,17 @@ namespace Game.Core
             BaseStats = initialStats;
             CurrentStats = BaseStats;
 
-            if (animator == null)
+            if (null == animator)
                 animator = GetComponent<Animator>();
 
             if (animator != null)
                 defaultController = animator.runtimeAnimatorController;
 
             // 행동 텍스트(ActionText) 설정
-            if (actionText == null)
+            if (null == actionText)
             {
                 var textObj = transform.Find("ActionText");
-                if (textObj != null)
+                if (null != textObj)
                     actionText = textObj.GetComponent<TextMesh>();
             }
         }
@@ -218,7 +217,7 @@ namespace Game.Core
 
         public void ApplyDamage(int damage)
         {
-            if (damage < 0)
+            if (0 > damage)
                 damage = 0;
             var newStats = CurrentStats;
             newStats.hp -= damage;
@@ -256,7 +255,7 @@ namespace Game.Core
             }
 
             // 자원 부족 체크
-            if (CurrentStats.hp < totalHpCost || CurrentStats.sp < totalSpCost || CurrentStats.mp < totalMpCost)
+            if (totalHpCost > CurrentStats.hp || totalSpCost > CurrentStats.sp || totalMpCost > CurrentStats.mp)
                 return false;
 
             // 자원 차감
@@ -293,7 +292,7 @@ namespace Game.Core
         {
             foreach (var skill in equippedSkills)
             {
-                if (null == skill || skill.skillType != SkillType.Active)
+                if (null == skill || SkillType.Active != skill.skillType)
                     continue;
 
                 int totalHpCost = 0;

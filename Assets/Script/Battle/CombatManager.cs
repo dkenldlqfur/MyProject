@@ -36,14 +36,14 @@ namespace Game.Battle
             {
                 physDamage = 0;
                 magicDamage = 0;
-                Debug.Log($"[Combat] {target.name} blocked damage due to immunity ({attackType} + {rangeType})");
+                Debug.Log($"[Combat] {target.name}이(가) 면역으로 인해 피해를 막았습니다. ({attackType} + {rangeType})");
             }
             
             // 3. 방어력 적용 (PreHit 이후 계산)
-            int reducedPhys = (physDamage > 0) ? Mathf.Max(1, physDamage - target.CurrentStats.physDefense) : 0;
-            int reducedMagic = (magicDamage > 0) ? Mathf.Max(1, magicDamage - target.CurrentStats.magicDefense) : 0;
+            int reducedPhys = (0 < physDamage) ? Mathf.Max(1, physDamage - target.CurrentStats.physDefense) : 0;
+            int reducedMagic = (0 < magicDamage) ? Mathf.Max(1, magicDamage - target.CurrentStats.magicDefense) : 0;
 
-            if (physDamage == 0 && magicDamage == 0)
+            if (0 == physDamage && 0 == magicDamage)
             {
                 reducedPhys = 0;
                 reducedMagic = 0;
@@ -58,17 +58,18 @@ namespace Game.Battle
             {
                 if (!isTrueStrike)
                 {
+                    ProcessReactionSkills(target, attacker, ReactionTiming.OnHit, HitResult.Miss, attackType, rangeType);
+
                     if (null != attacker)
                         ProcessReactionSkills(attacker, target, ReactionTiming.OnAttack, HitResult.Miss, attackType, rangeType);
                     
-                    ProcessReactionSkills(target, attacker, ReactionTiming.OnHit, HitResult.Miss, attackType, rangeType);
                     return HitResult.Miss;
                 }
             }
 
             // 5. 블럭 판정 (Block)
             bool isBlocked = CheckBlock(target);
-            float damageMultiplier = isBlocked ? 0.5f : 1.0f; // 기본 블럭 감소율 50%
+            float damageMultiplier = isBlocked ? target.CurrentStats.blockRate : 1.0f; // 블럭 감소율
 
             // 6. 크리티컬 판정 (Critical)
             bool isCritical = false;
@@ -86,13 +87,13 @@ namespace Game.Battle
             HitResult hitResult = isCritical ? HitResult.Critical : (isBlocked ? HitResult.Block : HitResult.Hit);
 
             // 8. OnAttack / OnHit 반응 스킬
-            if (null != attacker)
-                ProcessReactionSkills(attacker, target, ReactionTiming.OnAttack, hitResult, attackType, rangeType);
-            
             ProcessReactionSkills(target, attacker, ReactionTiming.OnHit, hitResult, attackType, rangeType);
 
+            if (null != attacker)
+                ProcessReactionSkills(attacker, target, ReactionTiming.OnAttack, hitResult, attackType, rangeType);
+
             // 9. 피격 상태 (인터럽트 등)
-            if (hitResult == HitResult.Hit || hitResult == HitResult.Critical)
+            if (HitResult.Hit == hitResult || HitResult.Critical == hitResult)
                 target.IsInterruptRequested = true;
 
             return hitResult;
@@ -134,7 +135,7 @@ namespace Game.Battle
                     continue;
 
                 // 타이밍 필터링
-                if (passiveSkill.reactionTiming != timing)
+                if (timing != passiveSkill.reactionTiming)
                     continue;
 
                 // 사망 시에는 자신 대상 스킬만 가능하도록 제한
@@ -156,7 +157,8 @@ namespace Game.Battle
 
         bool CheckAvoidance(Character attacker, Character target)
         {
-            if (null == target) return false;
+            if (null == target)
+                return false;
             
             // 단순화된 명중/회피 공식:
             // 명중률 = (공격자 명중 - 방어자 회피) + 기본 85%
@@ -169,7 +171,8 @@ namespace Game.Battle
 
         bool CheckBlock(Character target)
         {
-            if (null == target) return false;
+            if (null == target)
+                return false;
 
             // 방어율 = 방어자 블럭 확률
             int blockChance = target.CurrentStats.blockRate;
@@ -180,7 +183,8 @@ namespace Game.Battle
 
         bool CheckCritical(Character attacker, Character target)
         {
-            if (null == attacker) return false;
+            if (null == attacker)
+                return false;
 
             // 치명타율 = 공격자 치명타 (저항 없음)
             // CharacterStats에 critResist가 없으므로 공격자 치명타 확률만 사용하거나, 

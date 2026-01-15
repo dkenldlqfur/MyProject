@@ -8,7 +8,7 @@ namespace Game.Battle
     {
         protected override void OnExecute(ActionResourceRestoreEffectData data, SkillContext context)
         {
-            Character target = data.targetType == TargetType.Caster ? context.caster : context.target;
+            Character target = TargetType.Caster == data.targetType ? context.caster : context.target;
             if (null == target)
                 return;
 

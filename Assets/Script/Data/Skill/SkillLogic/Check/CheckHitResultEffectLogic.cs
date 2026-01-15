@@ -9,11 +9,11 @@ namespace Game.Battle
         protected override bool OnCheck(CheckHitResultEffectData data, SkillContext context)
         {
             // 1. HitResult 비교
-            if (context.LastHitResult != data.hitResult)
+            if (data.hitResult != context.LastHitResult)
                 return false;
 
             // 2. AttackType 비교 (None이면 무조건 통과)
-            if (data.attackType != AttackType.None)
+            if (AttackType.None != data.attackType)
             {
                 // LastAttackType이 조건에 포함되는지 확인 (Flags)
                 if ((context.LastAttackType & data.attackType) == 0)
@@ -21,10 +21,10 @@ namespace Game.Battle
             }
 
             // 3. RangeType 비교 (None이면 무조건 통과)
-            if (data.checkRangeType != RangeType.None)
+            if (RangeType.None != data.checkRangeType)
             {
                 // LastRangeType이 조건과 일치하는지 확인 (Exact Match)
-                if (context.LastRangeType != data.checkRangeType)
+                if (data.checkRangeType != context.LastRangeType)
                     return false;
             }
 

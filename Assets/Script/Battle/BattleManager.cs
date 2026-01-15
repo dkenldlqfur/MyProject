@@ -15,6 +15,26 @@ namespace Game.Battle
     {
         public static BattleManager Instance { get; private set; }
 
+        public class BattleAction
+        {
+            public Character Caster { get; private set; }
+            public SkillData SkillData { get; private set; }
+            public List<Character> Targets { get; private set; }
+            public HitResult IncomingHitResult { get; private set; }
+            public AttackType IncomingAttackType { get; private set; }
+            public RangeType IncomingRangeType { get; private set; }
+
+            public BattleAction(Character caster, SkillData skillData, List<Character> targets, HitResult hitResult, AttackType attackType, RangeType rangeType)
+            {
+                Caster = caster;
+                SkillData = skillData;
+                Targets = targets;
+                IncomingHitResult = hitResult;
+                IncomingAttackType = attackType;
+                IncomingRangeType = rangeType;
+            }
+        }
+
         struct HitInfo
         {
             public Character target;
@@ -37,6 +57,10 @@ namespace Game.Battle
         public UnitManager unitManager;
         public TurnManager turnManager;
         public CombatManager combatManager;
+
+        // Action Queue
+        Queue<BattleAction> actionQueue = new Queue<BattleAction>();
+        bool isProcessingQueue = false;
 
         // Legacy Support Properties
         public List<Character> AllyCharacters => unitManager.allyCharacters;
@@ -64,8 +88,8 @@ namespace Game.Battle
             // TurnManager 연결: AI 턴 실행 로직 주입
             turnManager = new TurnManager(unitManager, ExecuteAutoTurn);
 
-            // CombatManager 연결: 스킬 실행 로직 주입
-            combatManager = new CombatManager(unitManager, ExecuteSkill);
+            // CombatManager 연결: 스킬 실행 로직 주입 (EnqueueAction으로 변경)
+            combatManager = new CombatManager(unitManager, EnqueueAction);
         }
 
         public void StartBattle()
@@ -112,8 +136,8 @@ namespace Game.Battle
             if (turnManager.currentTurnCharacter != caster)
                 return;
 
-            ExecuteSkill(caster, skill, targets);
-            turnManager.EndTurn();
+            EnqueueAction(caster, skill, targets);
+            // 큐 처리 완료 후 EndTurn이 호출됨
         }
 
         /// <summary>
@@ -142,23 +166,65 @@ namespace Game.Battle
                 if (0 < targets.Count)
                 {
                     var targetList = new List<Character>{ targets[UnityEngine.Random.Range(0, targets.Count)] };
-                    ExecuteSkill(character, selectedSkill, targetList);
+                    EnqueueAction(character, selectedSkill, targetList);
+                }
+                else
+                {
+                   // 타겟 없음, 턴 스킵
+                   turnManager.EndTurn();
                 }
             }
-
-            turnManager.EndTurn();
+            else
+            {
+                // 사용 가능 스킬 없음, 턴 스킵
+                turnManager.EndTurn();
+            }
         }
 
         /// <summary>
-        /// 스킬을 실제로 실행하는 중앙 관리 메서드입니다.
+        /// 액션을 큐에 추가하고, 프로세서가 돌고 있지 않다면 시작합니다.
         /// </summary>
-        /// <param name="incomingHitResult">반응 스킬용 피격 결과 (일반 스킬은 기본값 사용)</param>
-        public void ExecuteSkill(Character caster, SkillData skillData, List<Character> targets, HitResult incomingHitResult = HitResult.None, AttackType incomingAttackType = AttackType.None, RangeType incomingRangeType = RangeType.None)
+        public void EnqueueAction(Character caster, SkillData skillData, List<Character> targets, HitResult incomingHitResult = HitResult.None, AttackType incomingAttackType = AttackType.None, RangeType incomingRangeType = RangeType.None)
         {
-            ExecuteSkillAsync(caster, skillData, targets, incomingHitResult, incomingAttackType, incomingRangeType).Forget();
+            var action = new BattleAction(caster, skillData, targets, incomingHitResult, incomingAttackType, incomingRangeType);
+            actionQueue.Enqueue(action);
+
+            if (!isProcessingQueue)
+                ProcessActionQueue().Forget();
         }
 
-        private async UniTaskVoid ExecuteSkillAsync(Character caster, SkillData skillData, List<Character> targets, HitResult incomingHitResult, AttackType incomingAttackType, RangeType incomingRangeType)
+        async UniTaskVoid ProcessActionQueue()
+        {
+            isProcessingQueue = true;
+            
+            // 큐가 빌 때까지 계속 실행 (하나 끝나면 다음거)
+            while (actionQueue.Count > 0)
+            {
+                var action = actionQueue.Dequeue();
+                
+                if (action.Caster.CurrentStats.hp <= 0)
+                    continue;
+
+                // 인터럽트 상태(피격/침묵 등)라면 스킬 취소 (스킬 체인 끊기)
+                if (action.Caster.IsInterruptRequested)
+                {
+                    Debug.Log($"[Battle] {action.Caster.name}의 행동이 인터럽트되어 취소되었습니다.");
+                    action.Caster.IsInterruptRequested = false; // 플래그 초기화
+                    continue;
+                }
+
+                await ExecuteSkillAsync(action.Caster, action.SkillData, action.Targets, action.IncomingHitResult, action.IncomingAttackType, action.IncomingRangeType);
+            }
+
+            isProcessingQueue = false;
+            
+            // 모든 액션 시퀀스가 끝났으므로 턴 종료
+            turnManager.EndTurn(); 
+        }
+
+        // ExecuteSkill을 외부에서 직접 호출하지 못하도록 막거나, EnqueueAction을 사용하도록 유도
+        // 기존 ExecuteSkill은 제거하거나 Private으로 변경
+        private async UniTask ExecuteSkillAsync(Character caster, SkillData skillData, List<Character> targets, HitResult incomingHitResult, AttackType incomingAttackType, RangeType incomingRangeType)
         {
             var hitInfos = new List<HitInfo>();
             
@@ -179,23 +245,41 @@ namespace Game.Battle
             if (SkillType.Active == skillData.SkillType)
             {
                 // A. 이동
-                caster.PlayAnimation("MoveToTarget");
-                
-                float moveDuration = caster.GetAnimationClipLength("Action_MoveToTarget");
-                // 애니메이션 클립을 찾지 못한 경우 기본값 1.0초 사용
-                if (moveDuration <= 0)
-                    moveDuration = 1.0f; 
-                await UniTask.Delay((int)(moveDuration * 1000));
+                // 타겟과의 거리가 충분히 가까우면(이미 이동해 있다면) 이동 애니메이션 생략
+                bool skipMove = false;
+                if (targets.Count > 0 && targets[0] != null)
+                {
+                    float dist = Vector3.Distance(caster.transform.position, targets[0].transform.position);
+                    if (dist < 2.0f) // 임의의 근접 거리 임계값
+                        skipMove = true;
+                }
+
+                if (!skipMove)
+                {
+                    caster.PlayAnimation("MoveToTarget");
+                    
+                    float moveDuration = caster.GetAnimationClipLength("Action_MoveToTarget");
+                    if (0 >= moveDuration)
+                        moveDuration = 1.0f; 
+                    await UniTask.Delay((int)(moveDuration * 1000));
+                }
 
                 // B. 공격 (텍스트 표시)
                 caster.PlayAnimation("Attack");
                 
                 float attackDuration = caster.GetAnimationClipLength("Action_Attack");
-                if (attackDuration <= 0)
+                if (0 >= attackDuration)
                     attackDuration = 0.5f;
-                await UniTask.Delay((int)(attackDuration * 1000));
+
+                // 애니메이션 전체 길이에 대한 백그라운드 대기 (return 직전까지 동작 유지용)
+                var attackEndTask = UniTask.Delay((int)(attackDuration * 1000));
+
+                // 타격 시점("Hit" 키)까지 대기
+                // 애니메이션 길이만큼 Timeout을 설정하여 키가 없거나 놓쳤을 경우를 대비
+                await WaitForAnimationKey(caster, "Hit", attackDuration + 0.1f);
 
                 // C. 반응형 스킬 처리 (공격 전)
+                // (타격 직전에 PreAttack을 수행하는 것이 논리적으로 적절)
                 if (0 < targets.Count)
                     combatManager.ProcessReactionSkills(targets[0], caster, ReactionTiming.PreAttack);
             }
@@ -210,7 +294,7 @@ namespace Game.Battle
                 
                 // 사거리 타입 초기화
                 RangeType currentRangeType = incomingRangeType;
-                if (currentRangeType == RangeType.None)
+                if (RangeType.None == currentRangeType)
                     currentRangeType = skillData.rangeType;
                 context.LastRangeType = currentRangeType;
 
@@ -248,9 +332,12 @@ namespace Game.Battle
                     hitInfos.Add(new HitInfo(target, caster, context.LastHitResult));
                     
                 // 회피 애니메이션 재생
-                if (context.LastHitResult == HitResult.Miss)
+                if (HitResult.Miss == context.LastHitResult)
                     target.PlayDodgeAnimation();
             }
+
+            // 남은 애니메이션 시간 대기 (타격 후 동작 자연스럽게 연결)
+            await attackEndTask;
 
             // 3. 속도 기준 정렬 (내림차순)
             hitInfos.Sort((a, b) => b.target.CurrentStats.speed.CompareTo(a.target.CurrentStats.speed));
@@ -276,16 +363,24 @@ namespace Game.Battle
             }
 
             // 6. 복귀 애니메이션 & 상태 복원
+            // 큐에 남은 액션이 있다면(연계된 반응 스킬 등) 복귀하지 않고 현 위치 유지
             if (SkillType.Active == skillData.SkillType)
             {
-                caster.PlayAnimation("ReturnToStart");
-                
-                float returnDuration = caster.GetAnimationClipLength("Action_ReturnToStart");
-                if (returnDuration <= 0)
-                    returnDuration = 1.0f;
-                await UniTask.Delay((int)(returnDuration * 1000));
-                
-                caster.RestoreAnimatorController();
+                if (actionQueue.Count == 0)
+                {
+                    caster.PlayAnimation("ReturnToStart");
+                    
+                    float returnDuration = caster.GetAnimationClipLength("Action_ReturnToStart");
+                    if (0 >= returnDuration)
+                        returnDuration = 1.0f;
+                    await UniTask.Delay((int)(returnDuration * 1000));
+                    
+                    caster.RestoreAnimatorController();
+                }
+                else
+                {
+                    // 연계 동작이 남아있어 복귀 생략
+                }
             }
         }
 
@@ -295,7 +390,7 @@ namespace Game.Battle
         void ProcessDeath(Character character)
         {
             // TODO: Implement death event, animation, and unit removal
-            Debug.Log($"{character.name} has died.");
+            Debug.Log($"{character.name}가 사망했습니다.");
         }
 
         /// <summary>
@@ -324,7 +419,7 @@ namespace Game.Battle
             bool triggered = false;
             Action<string> handler = (key) =>
             {
-                if (key == targetKey)
+                if (targetKey == key)
                     triggered = true;
             };
 
@@ -336,7 +431,7 @@ namespace Game.Battle
             }
             catch (TimeoutException)
             {
-                Debug.LogWarning($"Animation Key '{targetKey}' timed out for {character.name}.");
+                Debug.LogWarning($"애니메이션 키 '{targetKey}'가 {character.name}에 대해 시간 초과되었습니다.");
             }
             finally
             {

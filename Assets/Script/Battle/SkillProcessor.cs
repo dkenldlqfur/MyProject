@@ -33,7 +33,7 @@ namespace Game.Battle
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[SkillProcessor] Failed to instantiate logic for {type.Name}: {e.Message}");
+                        Debug.LogError($"[SkillProcessor] {type.Name} 로직 인스턴스화 실패: {e.Message}");
                     }
                 }
             }
@@ -47,7 +47,7 @@ namespace Game.Battle
             if (logics.TryGetValue(data.LogicType, out var logic))
                 logic.Execute(data, context);
             else
-                Debug.LogWarning($"[SkillProcessor] No logic found for SkillLogicType: {data.LogicType}");
+                Debug.LogWarning($"[SkillProcessor] SkillLogicType에 대한 로직을 찾을 수 없음: {data.LogicType}");
         }
     }
 }

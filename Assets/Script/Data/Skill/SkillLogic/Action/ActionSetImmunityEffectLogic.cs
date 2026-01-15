@@ -15,10 +15,10 @@ namespace Game.Battle
             
             // 여기서는 context.target에게 부여하는 것으로 가정 (Buff Skill이 아군을 타겟팅했다면 target이 아군)
             // 만약 Self Buff라면 caster == target 일 것임.
-            if (context.target != null)
+            if (null != context.target)
             {
                 context.target.AddImmunity(data.immunityAttackType, data.immunityRangeType);
-                Debug.Log($"[Immunity] Is Applied to {context.target.name} : {data.immunityAttackType} + {data.immunityRangeType}");
+                Debug.Log($"[Immunity] {context.target.name}에게 면역 적용됨 : {data.immunityAttackType} + {data.immunityRangeType}");
             }
         }
     }
