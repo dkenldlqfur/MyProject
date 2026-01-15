@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: NewActiveSkillData
+  m_EditorClassIdentifier: Assembly-CSharp:Game.Data:ActiveSkillData
+  skillName: 
+  description: 
+  skillType: 0
+  rangeType: 0
+  scopeType: 0
+  targetCount: 0
+  effects:
+  - {fileID: 11400000, guid: e1b481cfba2612e47bafd8f307451110, type: 2}
+  - {fileID: 11400000, guid: 8980e9bbd51227149a74b4c35a631453, type: 2}
+  - {fileID: 11400000, guid: 5d896710a0dc6b846baab96bf0bc3078, type: 2}
