@@ -96,7 +96,7 @@ namespace Game.Data
     {
         public abstract SkillEffectType EffectType { get; }
         public abstract SkillLogicType LogicType { get; } // 연결될 로직 클래스를 결정하는 타입
-
+ 
         public string effectDescription; // 기획용 설명
 
         [Tooltip("애니메이션 이벤트 키 (설정 시 해당 키가 호출될 때까지 대기 후 실행)")]
@@ -108,6 +108,9 @@ namespace Game.Data
         public int hpCost = 0; // 효과 추가 소모 HP
         public int spCost = 0; // 효과 추가 소모 SP
         public int mpCost = 0; // 효과 추가 소모 MP
+
+        [Header("Animation Settings")]
+        public RuntimeAnimatorController animatorOverride; // 스킬 전용 애니메이터 컨트롤러 (Attack, Return 스테이트 포함 필수)
     }
 
     public abstract class ActionEffectData : SkillEffectData

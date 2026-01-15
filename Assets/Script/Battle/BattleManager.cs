@@ -58,12 +58,13 @@ namespace Game.Battle
 
         void InitializeSubManagers()
         {
+            // 하위 매니저 초기화
             unitManager = new UnitManager();
             
-            // 콜백 연결: TurnManager가 AI 턴을 진행하려 할 때 호출할 메서드 지정
+            // TurnManager 연결: AI 턴 실행 로직 주입
             turnManager = new TurnManager(unitManager, ExecuteAutoTurn);
 
-            // 콜백 연결: CombatManager가 스킬을 실행해야 할 때 호출할 메서드 지정
+            // CombatManager 연결: 스킬 실행 로직 주입
             combatManager = new CombatManager(unitManager, ExecuteSkill);
         }
 
@@ -123,7 +124,7 @@ namespace Game.Battle
             if (null == character)
                 return;
 
-            // 스킬 선택 logic (임시: 랜덤)
+            // 스킬 선택 로직 (임시: 랜덤 선택)
             SkillData selectedSkill = null;
             foreach (var skill in character.equippedSkills)
             {
@@ -136,7 +137,7 @@ namespace Game.Battle
 
             if (null != selectedSkill)
             {
-                // 타겟 logic (임시: 랜덤)
+                // 타겟 선택 로직 (임시: 랜덤 선택)
                 var targets = !character.isPlayerFaction ? unitManager.GetCharacters(true) : unitManager.GetCharacters(false);
                 if (0 < targets.Count)
                 {
@@ -160,36 +161,60 @@ namespace Game.Battle
         private async UniTaskVoid ExecuteSkillAsync(Character caster, SkillData skillData, List<Character> targets, HitResult incomingHitResult, AttackType incomingAttackType, RangeType incomingRangeType)
         {
             var hitInfos = new List<HitInfo>();
-
-            // 1. PreAttack Trigger (Active Skill Only)
+            
+            // 0. 애니메이터 오버라이드 설정 (존재하는 경우)
             if (SkillType.Active == skillData.SkillType)
             {
-                // TODO: Handle AOE target selection for reaction skills properly (currently using first target)
-                if (targets.Count > 0)
-                    combatManager.ProcessReactionSkills(targets[0], caster, ReactionTiming.PreAttack);
+                foreach (var effect in skillData.effects)
+                {
+                    if (effect.animatorOverride != null)
+                    {
+                        caster.SetAnimatorOverride(effect.animatorOverride);
+                        break;
+                    }
+                }
             }
 
-            // 2. Cooldown Management
+            // 1. 타겟 이동 및 공격 (액티브 스킬 전용)
             if (SkillType.Active == skillData.SkillType)
             {
-                // TODO: Integrate with CooldownManager
+                // A. 이동
+                caster.PlayAnimation("MoveToTarget");
+                
+                float moveDuration = caster.GetAnimationClipLength("Action_MoveToTarget");
+                // 애니메이션 클립을 찾지 못한 경우 기본값 1.0초 사용
+                if (moveDuration <= 0)
+                    moveDuration = 1.0f; 
+                await UniTask.Delay((int)(moveDuration * 1000));
+
+                // B. 공격 (텍스트 표시)
+                caster.PlayAnimation("Attack");
+                
+                float attackDuration = caster.GetAnimationClipLength("Action_Attack");
+                if (attackDuration <= 0)
+                    attackDuration = 0.5f;
+                await UniTask.Delay((int)(attackDuration * 1000));
+
+                // C. 반응형 스킬 처리 (공격 전)
+                if (0 < targets.Count)
+                    combatManager.ProcessReactionSkills(targets[0], caster, ReactionTiming.PreAttack);
             }
 
             foreach (var target in targets)
             {
                 var context = new SkillContext(caster, target);
                 
-                // Initialize AttackType
+                // 공격 타입 초기화
                 if (incomingAttackType != AttackType.None)
                     context.LastAttackType = incomingAttackType;
                 
-                // Initialize RangeType
+                // 사거리 타입 초기화
                 RangeType currentRangeType = incomingRangeType;
                 if (currentRangeType == RangeType.None)
                     currentRangeType = skillData.rangeType;
                 context.LastRangeType = currentRangeType;
 
-                // Initialize HitResult (for Reaction Skills)
+                // 피격 결과 초기화 (반응형 스킬용)
                 if (HitResult.None != incomingHitResult)
                     context.LastHitResult = incomingHitResult;
 
@@ -201,11 +226,11 @@ namespace Game.Battle
                     if (SkillEffectType.Conditional == effect.EffectType && !context.IsConditionCheck)
                         continue;
 
-                    // Animation Play
+                    // 애니메이션 재생
                     if (!string.IsNullOrEmpty(effect.animationTriggerName))
                         caster.PlayAnimation(effect.animationTriggerName);
 
-                    // Wait for Animation Event
+                    // 애니메이션 이벤트 대기
                     if (!string.IsNullOrEmpty(effect.triggerKey))
                         await WaitForAnimationKey(caster, effect.triggerKey);
 
@@ -218,32 +243,49 @@ namespace Game.Battle
                     }
                 }
 
-                // Collect Hit Results
+                // 피격 결과 수집
                 if (HitResult.None != context.LastHitResult)
                     hitInfos.Add(new HitInfo(target, caster, context.LastHitResult));
+                    
+                // 회피 애니메이션 재생
+                if (context.LastHitResult == HitResult.Miss)
+                    target.PlayDodgeAnimation();
             }
 
-            // 3. Sort by Speed (Descending)
+            // 3. 속도 기준 정렬 (내림차순)
             hitInfos.Sort((a, b) => b.target.CurrentStats.speed.CompareTo(a.target.CurrentStats.speed));
 
-            // 4. Post-Process Triggers (Active Skill Only)
+            // 4. 후처리 트리거 (액티브 스킬 전용)
             if (SkillType.Active == skillData.SkillType)
             {
-                // Post-Hit (Target)
+                // 피격 후 처리 (타겟)
                 foreach (var info in hitInfos)
                 {
                     combatManager.ProcessReactionSkills(info.target, info.attacker, ReactionTiming.PostHit, info.hitResult);
                 }
 
-                // Post-Attack (Caster)
+                // 공격 후 처리 (시전)
                 combatManager.ProcessReactionSkills(caster, null, ReactionTiming.PostAttack);
             }
 
-            // 5. Process Death
+            // 5. 사망 처리
             foreach (var info in hitInfos)
             {
                 if (0 >= info.target.CurrentStats.hp)
                     ProcessDeath(info.target);
+            }
+
+            // 6. 복귀 애니메이션 & 상태 복원
+            if (SkillType.Active == skillData.SkillType)
+            {
+                caster.PlayAnimation("ReturnToStart");
+                
+                float returnDuration = caster.GetAnimationClipLength("Action_ReturnToStart");
+                if (returnDuration <= 0)
+                    returnDuration = 1.0f;
+                await UniTask.Delay((int)(returnDuration * 1000));
+                
+                caster.RestoreAnimatorController();
             }
         }
 

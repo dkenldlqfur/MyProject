@@ -29,6 +29,10 @@ namespace Game.Core
         [SerializeField] CharacterData characterData; // 캐릭터 기본 데이터
         [SerializeField] List<ItemData> equippedItemData; // 장착 보너스 아이템 데이터
 
+        [SerializeField] private Animator animator; // 애니메이터 컴포넌트
+        [SerializeField] private TextMesh actionText; // 행동 텍스트 (공격, 스킬명 등 표시)
+        private RuntimeAnimatorController defaultController;
+
         public CharacterStats BaseStats { get; private set; } // characterData + equippedItemData (기본 스탯)
         public CharacterStats CurrentStats { get; private set; } // 현재 스탯
         public CrowdControlType CurrentCrowdControlType { get; private set; } // 현재 군중 제어 상태
@@ -60,7 +64,7 @@ namespace Game.Core
 
         public bool IsInterruptRequested { get; set; }
 
-        // Immunity Logic
+        // 면역 로직
         struct ImmunityInfo
         {
             public AttackType attackType;
@@ -77,14 +81,15 @@ namespace Game.Core
 
         public bool IsImmune(AttackType incomingAttackType, RangeType incomingRangeType)
         {
-            if (AttackType.None == incomingAttackType) return false;
+            if (AttackType.None == incomingAttackType)
+                return false;
 
             foreach (var immunity in temporaryImmunities)
             {
-                // AttackType Check (Flags)
+                // 공격 타입 확인 (플래그)
                 bool attackTypeMatch = (immunity.attackType == AttackType.None) || ((incomingAttackType & immunity.attackType) != 0);
                 
-                // RangeType Check (Exact Match or None for Any)
+                // 사거리 타입 확인 (정확한 일치 또는 None이면 모두)
                 bool rangeTypeMatch = (immunity.rangeType == RangeType.None) || (immunity.rangeType == incomingRangeType);
 
                 if (attackTypeMatch && rangeTypeMatch)
@@ -98,7 +103,7 @@ namespace Game.Core
             temporaryImmunities.Clear();
         }
 
-        // Events for Decoupling
+        // 디커플링을 위한 이벤트 정의
         public delegate HitResult AttackRequestHandler(Character attacker, Character target, int physDamage, int magicDamage, SkillEffectData sourceEffect, AttackType attackType, RangeType rangeType);
         public event AttackRequestHandler OnAttackRequested;
         
@@ -116,25 +121,76 @@ namespace Game.Core
 
         public event Action<string> OnPlayAnimationRequested;
 
-        /// <summary>
-        /// 특정 애니메이션(Trigger) 재생을 요청합니다. (View/Controller에서 구독하여 처리)
-        /// </summary>
         public void PlayAnimation(string triggerName)
         {
+            if (animator != null)
+                animator.SetTrigger(triggerName);
+            
             OnPlayAnimationRequested?.Invoke(triggerName);
+        }
+
+        public void PlayDodgeAnimation()
+        {
+            if (animator != null)
+                animator.SetTrigger("Dodge");
+        }
+
+        public void SetAnimatorOverride(RuntimeAnimatorController overrideController)
+        {
+            if (animator != null && overrideController != null)
+                animator.runtimeAnimatorController = overrideController;
+        }
+
+        public void RestoreAnimatorController()
+        {
+            if (animator != null && defaultController != null)
+                animator.runtimeAnimatorController = defaultController;
+        }
+
+        public void SetActionText(string text)
+        {
+            if (actionText != null)
+                actionText.text = text;
+        }
+
+        public float GetAnimationClipLength(string clipName)
+        {
+            if (animator == null || animator.runtimeAnimatorController == null)
+                return 0f;
+
+            foreach (var clip in animator.runtimeAnimatorController.animationClips)
+            {
+                if (clip.name == clipName)
+                    return clip.length;
+            }
+            return 0f; // 찾지 못함
         }
 
         void Awake()
         {
             // 초기 스탯 계산
-            var initialStats = characterData.baseStats;
-            foreach (var equippedItem in equippedItemData)
+            CharacterStats initialStats = characterData.baseStats;
+            if (equippedItemData != null)
             {
-                initialStats += equippedItem.stats;
+                foreach (var equippedItem in equippedItemData)
+                    initialStats += equippedItem.stats;
             }
             BaseStats = initialStats;
-
             CurrentStats = BaseStats;
+
+            if (animator == null)
+                animator = GetComponent<Animator>();
+
+            if (animator != null)
+                defaultController = animator.runtimeAnimatorController;
+
+            // 행동 텍스트(ActionText) 설정
+            if (actionText == null)
+            {
+                var textObj = transform.Find("ActionText");
+                if (textObj != null)
+                    actionText = textObj.GetComponent<TextMesh>();
+            }
         }
 
         void Start()
@@ -162,7 +218,8 @@ namespace Game.Core
 
         public void ApplyDamage(int damage)
         {
-            if (damage < 0) damage = 0;
+            if (damage < 0)
+                damage = 0;
             var newStats = CurrentStats;
             newStats.hp -= damage;
             CurrentStats = newStats;
