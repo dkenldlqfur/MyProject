@@ -1,5 +1,6 @@
 namespace Game.Data
 {
+    using System.Collections.Generic;
     using UnityEngine;
 
     /// <summary>
@@ -12,6 +13,6 @@ namespace Game.Data
         public CharacterStats stats; // 아이템 장착 시 보너스 스탯
 
         public SkillData skillData;
-        public List<SkillEffect> providedEffects = new();
+        public List<SkillEffectData> providedEffects = new();
     }
 }
