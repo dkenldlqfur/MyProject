@@ -45,7 +45,7 @@ namespace Game.Core
 
         [Tooltip("비용 계수 (스킬의 기본 소모량을 배가시키는 정도)")]
         public float costFactor = 1.0f;
-        
+
         [Tooltip("배치된 그리드 인덱스 (1~6)")]
         [Range(1, 6)]
         public int gridIndex;
@@ -88,7 +88,7 @@ namespace Game.Core
             {
                 // 공격 타입 확인 (플래그)
                 bool attackTypeMatch = (immunity.attackType == AttackType.None) || ((incomingAttackType & immunity.attackType) != 0);
-                
+
                 // 사거리 타입 확인 (정확한 일치 또는 None이면 모두)
                 bool rangeTypeMatch = (immunity.rangeType == RangeType.None) || (immunity.rangeType == incomingRangeType);
 
@@ -106,7 +106,7 @@ namespace Game.Core
         // 디커플링을 위한 이벤트 정의
         public delegate HitResult AttackRequestHandler(Character attacker, Character target, int physDamage, int magicDamage, SkillEffectData sourceEffect, AttackType attackType, RangeType rangeType);
         public event AttackRequestHandler OnAttackRequested;
-        
+
         public event Action<Character, ResourceType, int, bool> OnRestoreRequested;
         public event Action<Character, Character, CrowdControlType> OnCrowdControlRequested;
         public event Action<string> OnAnimationTriggered;
@@ -125,7 +125,7 @@ namespace Game.Core
         {
             if (animator != null)
                 animator.SetTrigger(triggerName);
-            
+
             OnPlayAnimationRequested?.Invoke(triggerName);
         }
 
@@ -159,6 +159,7 @@ namespace Game.Core
                 return 0f;
 
             foreach (var clip in animator.runtimeAnimatorController.animationClips)
+            {
                 if (clipName == clip.name)
                     return clip.length;
             }
@@ -229,7 +230,7 @@ namespace Game.Core
         /// </summary>
         public void RestoreResource(ResourceType resourceType, int value, bool isOverHeal)
         {
-             OnRestoreRequested?.Invoke(this, resourceType, value, isOverHeal);
+            OnRestoreRequested?.Invoke(this, resourceType, value, isOverHeal);
         }
 
         /// <summary>

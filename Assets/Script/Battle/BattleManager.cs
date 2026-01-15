@@ -227,6 +227,7 @@ namespace Game.Battle
         private async UniTask ExecuteSkillAsync(Character caster, SkillData skillData, List<Character> targets, HitResult incomingHitResult, AttackType incomingAttackType, RangeType incomingRangeType)
         {
             var hitInfos = new List<HitInfo>();
+            UniTask attackEndTask = UniTask.CompletedTask;
             
             // 0. 애니메이터 오버라이드 설정 (존재하는 경우)
             if (SkillType.Active == skillData.SkillType)
@@ -272,7 +273,7 @@ namespace Game.Battle
                     attackDuration = 0.5f;
 
                 // 애니메이션 전체 길이에 대한 백그라운드 대기 (return 직전까지 동작 유지용)
-                var attackEndTask = UniTask.Delay((int)(attackDuration * 1000));
+                attackEndTask = UniTask.Delay((int)(attackDuration * 1000));
 
                 // 타격 시점("Hit" 키)까지 대기
                 // 애니메이션 길이만큼 Timeout을 설정하여 키가 없거나 놓쳤을 경우를 대비
